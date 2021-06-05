@@ -41,7 +41,7 @@ export class SetSetNumber {
 }
 
 function encode(set: Set<number>): string {
-    return [...set.values()].sort().join(' ')
+    return [...set.values()].sort((a, b) => a - b).join(' ')
 }
 
 function decode(string: string): Set<number> {

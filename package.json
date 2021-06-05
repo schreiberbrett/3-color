@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@types/ramda": "^0.27.38",
+    "immutable": "^4.0.0-rc.12",
     "jshint": "^2.12.0",
     "kanren": "^1.0.0-beta.1",
     "ramda": "^0.27.1",

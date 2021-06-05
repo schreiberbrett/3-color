@@ -1,14 +1,39 @@
 <script lang="ts">
-	import { analyze, asGraph } from "./analyze";
-	import type { Analysis } from './analyze'
-	import { allColorings, whatColors } from './coloring'
-	import type { Color } from './coloring';
-	import Diamond from './primes/Diamond.svelte';
-	import Qe8 from './primes/QE8.svelte';
-import { isJust } from "./Maybe";
+	import { asGraph } from "./analyze";
+	import { oddCycleVertexColor, allOddCycles, rotate, edgeInOddCycle, generateXis, xiVertexColor, subsets, allZetas } from './coloring'
+	import type { Color, OddCycle, Xi } from './coloring';
+	import type { Q } from './Q'
+	import { generateQs, allOddCycles as allOddCycles2, qVertexColor, qMentionedEdge } from './Q'
 
+	type SelectionState = {
+		name: 'Not Yet Computed'
+	} | {
+		name: 'Computed'
+		previousOddCycles: OddCycle[]
+		currentOddCycle: OddCycle
+		restOddCycles: OddCycle[]
+	} | {
+		name: 'No Odd Cycles'
+	} | {
+		name: 'Xis Computed'
+		oddCycles: OddCycle[]
+		previousXis: Xi[],
+		currentXi: Xi,
+		restXis: Xi[]
+	} | {
+		name: 'No Xis'
+	} | {
+		name: 'No Qs'
+	} | {
+		name: 'Qs Computed'
+		previousQs: Q[],
+		currentQ: Q
+		restQs: Q[]
+	}
 
-	type State = {
+	let selectionState: SelectionState = {name: 'Not Yet Computed'}
+
+	type EditingState = {
 		name: 'Neutral'
 	} | {
 		name: 'Hover'
@@ -28,7 +53,8 @@ import { isJust } from "./Maybe";
 		source: number
 		destination: number
 	}
-	let state: State = {name: 'Neutral'}
+
+	let editingState: EditingState = {name: 'Neutral'}
 	let vertices: number[] = []
 	let edges: [number, number][] = []
 	let xs: number[] = []
@@ -101,6 +127,14 @@ import { isJust } from "./Maybe";
 	}
 
 	function mentionedEdge(u: number, v: number): boolean {
+		if (selectionState.name === 'Computed') {
+			return edgeInOddCycle(u, v, selectionState.currentOddCycle)
+		}
+
+		if (selectionState.name === 'Qs Computed') {
+			return qMentionedEdge(u, v, selectionState.currentQ)
+		}
+
 		return false
 	}
 
@@ -108,37 +142,44 @@ import { isJust } from "./Maybe";
 		return 'black'
 	}
 
-	function vertexColor(vertex: number): 'red' | 'blue' | 'purple' | 'white' {
+	function vertexColor(vertex: number): string {
+		if (selectionState.name === 'Computed') {
+			return oddCycleVertexColor(vertex, selectionState.currentOddCycle)
+		}
+
+		if (selectionState.name === 'Xis Computed') {
+			return xiVertexColor(vertex, selectionState.currentXi)
+		}
+
+		if (selectionState.name === 'Qs Computed') {
+			return qVertexColor(vertex, selectionState.currentQ)
+		}
+
 		return 'white'
 	}
-
-	function edgeEquals(u: number, v: number, [a, b]: [number, number]): boolean {
-		return (u === a && v === b) || (u === b && v === a)
-	}
-
 </script>
 
 <main>
 <p>
 	<svg
 		on:mousemove|preventDefault={event => {
-			if (state.name === 'Dragging') {
+			if (editingState.name === 'Dragging') {
 				const { cursorX, cursorY } = cursorPosition(event)
-				xs[state.vertex] = cursorX
-				ys[state.vertex] = cursorY
-				state = { name: 'Dragging', vertex: state.vertex, ...cursorPosition(event)	}		
-			} else if (state.name === 'MakingEdge') {
-				state = { name: 'MakingEdge', source: state.source, ...cursorPosition(event) }
+				xs[editingState.vertex] = cursorX
+				ys[editingState.vertex] = cursorY
+				editingState = { name: 'Dragging', vertex: editingState.vertex, ...cursorPosition(event)	}		
+			} else if (editingState.name === 'MakingEdge') {
+				editingState = { name: 'MakingEdge', source: editingState.source, ...cursorPosition(event) }
 			}
 		}}
 		on:mouseup|preventDefault={event => {
-			if (state.name === 'Neutral') {
+			if (editingState.name === 'Neutral') {
 				addVertex(event)
-			} else if (state.name === 'MakingEdge') {
-				state = { name: 'Neutral' }
-			} else if (state.name === 'SnappedEdge') {
-				addEdge(state.source, state.destination)
-				state = { name: 'Hover', vertex: state.destination }
+			} else if (editingState.name === 'MakingEdge') {
+				editingState = { name: 'Neutral' }
+			} else if (editingState.name === 'SnappedEdge') {
+				addEdge(editingState.source, editingState.destination)
+				editingState = { name: 'Hover', vertex: editingState.destination }
 			}
 		}}
 		on:auxclick|preventDefault
@@ -156,72 +197,72 @@ import { isJust } from "./Maybe";
 		{#each vertices as vertex}
 			<circle	class="snappable-area" cx={xs[vertex]} cy={ys[vertex]} r="40" fill="none"
 				on:mouseover|preventDefault={_ => {
-					if (state.name === 'MakingEdge' && vertex !== state.source && !edgeExists(vertex, state.source)) {
-						state = { name: 'SnappedEdge', source: state.source, destination: vertex }
+					if (editingState.name === 'MakingEdge' && vertex !== editingState.source && !edgeExists(vertex, editingState.source)) {
+						editingState = { name: 'SnappedEdge', source: editingState.source, destination: vertex }
 					}
 				}}
 
 				on:mouseleave|preventDefault={event => {
-					if (state.name === 'SnappedEdge') {
-						state = { name: 'MakingEdge', source: state.source, ...cursorPosition(event) }
+					if (editingState.name === 'SnappedEdge') {
+						editingState = { name: 'MakingEdge', source: editingState.source, ...cursorPosition(event) }
 					}
 				}}
 
 				on:click|preventDefault={_ => {
-					if (state.name === 'SnappedEdge') {
-						addEdge(state.source, state.destination)
-						state = { name: 'Neutral' }
+					if (editingState.name === 'SnappedEdge') {
+						addEdge(editingState.source, editingState.destination)
+						editingState = { name: 'Neutral' }
 					}
 				}}
 			/>
 
 			<g
 				on:mouseover|preventDefault={_ => {
-					if (state.name === 'Neutral') {
-						state = { name: 'Hover', vertex	}
-					} else if (state.name === 'MakingEdge' && vertex !== state.source && !edgeExists(vertex, state.source)) {
-						state = { name: 'SnappedEdge', source: state.source, destination: vertex }
+					if (editingState.name === 'Neutral') {
+						editingState = { name: 'Hover', vertex	}
+					} else if (editingState.name === 'MakingEdge' && vertex !== editingState.source && !edgeExists(vertex, editingState.source)) {
+						editingState = { name: 'SnappedEdge', source: editingState.source, destination: vertex }
 					}
 				}}
 
 				on:mouseleave|preventDefault={event => {
-					if (state.name === 'Hover') {
-						state = { name: 'Neutral' }
-					} else if (state.name === 'SnappedEdge') {
-						state = { name: 'MakingEdge', source: state.source, ...cursorPosition(event) }
+					if (editingState.name === 'Hover') {
+						editingState = { name: 'Neutral' }
+					} else if (editingState.name === 'SnappedEdge') {
+						editingState = { name: 'MakingEdge', source: editingState.source, ...cursorPosition(event) }
 					}
 				}}
 
 				on:mousedown|preventDefault={event => {
-					if (state.name === 'Hover') {
+					if (editingState.name === 'Hover') {
 						const { cursorX, cursorY } = cursorPosition(event)
-						state = { name: 'Dragging', vertex: state.vertex, cursorX, cursorY }
+						editingState = { name: 'Dragging', vertex: editingState.vertex, cursorX, cursorY }
 					}
 				}}
 
 				on:mouseup|preventDefault={_ => {
-					if (state.name === 'Dragging') {
-						state = { name: 'Hover', vertex: state.vertex }
-					} else if (state.name === 'MakingEdge') {
-						state = { name: 'Hover', vertex: state.source }
-					} else if (state.name === 'SnappedEdge') {
-						addEdge(state.source, state.destination)
-						state = { name: 'Hover', vertex: state.destination }
+					if (editingState.name === 'Dragging') {
+						editingState = { name: 'Hover', vertex: editingState.vertex }
+					} else if (editingState.name === 'MakingEdge') {
+						editingState = { name: 'Hover', vertex: editingState.source }
+					} else if (editingState.name === 'SnappedEdge') {
+						addEdge(editingState.source, editingState.destination)
+						editingState = { name: 'Hover', vertex: editingState.destination }
 					}
 				}}
 
 				on:mousemove|preventDefault={event => {
-					if (state.name === 'Dragging') {
+					if (editingState.name === 'Dragging') {
 						const { cursorX, cursorY } = cursorPosition(event)
 						xs[vertex] = cursorX
 						ys[vertex] = cursorY
-						state = { name: 'Dragging', vertex: state.vertex, cursorX, cursorY }		
+						editingState = { name: 'Dragging', vertex: editingState.vertex, cursorX, cursorY }		
 					}
 				}}
 
 				on:dblclick|preventDefault={event => {
-					if (state.name === 'Hover') {
-						state = {
+					if (editingState.name === 'Hover') {
+						editingState = {
 							name: 'MakingEdge',
 							source: vertex,
 							cursorX: xs[vertex],
@@ -231,9 +272,9 @@ import { isJust } from "./Maybe";
 				}}
 
 				on:auxclick|preventDefault={event => {
-					if (state.name === 'Hover') {
-						removeVertex(state.vertex)
-						state = { name: 'Neutral' }
+					if (editingState.name === 'Hover') {
+						removeVertex(editingState.vertex)
+						editingState = { name: 'Neutral' }
 					}
 				}}
 
@@ -241,8 +282,8 @@ import { isJust } from "./Maybe";
 			>
 				<circle
 					class={
-						(state.name === 'Hover' || state.name === 'Dragging') && state.vertex === vertex
-							? (state.name === 'Hover' ? 'hovering' : 'dragging')
+						(editingState.name === 'Hover' || editingState.name === 'Dragging') && editingState.vertex === vertex
+							? (editingState.name === 'Hover' ? 'hovering' : 'dragging')
 							: 'neutral'
 					}
 					cx={xs[vertex]}	cy={ys[vertex]}	r="20" fill={vertexColor(vertex)} stroke="black"
@@ -252,30 +293,30 @@ import { isJust } from "./Maybe";
 			</g>
 		{/each}
 
-		{#if state.name === 'MakingEdge'}
+		{#if editingState.name === 'MakingEdge'}
 			<line
 				class="preview-line"
 				stroke="black"
 
-				x1={xs[state.source]}
-				y1={ys[state.source]}
+				x1={xs[editingState.source]}
+				y1={ys[editingState.source]}
 
-				x2={state.cursorX}
-				y2={state.cursorY}
+				x2={editingState.cursorX}
+				y2={editingState.cursorY}
 			/>
 		{/if}
 
-		{#if state.name === 'SnappedEdge'}
+		{#if editingState.name === 'SnappedEdge'}
 			<line
 				class="preview-line"
 				stroke="black"
 
-				x1={xs[state.source]}
-				y1={ys[state.source]}
+				x1={xs[editingState.source]}
+				y1={ys[editingState.source]}
 
 
-				x2={xs[state.destination]}
-				y2={ys[state.destination]}
+				x2={xs[editingState.destination]}
+				y2={ys[editingState.destination]}
 			/>
 		{/if}
 	</svg>
@@ -284,17 +325,149 @@ import { isJust } from "./Maybe";
 
 <button on:click={() => {
 	const graph = asGraph(vertices.length, edges)
-	const all = allColorings(graph)
+	const oddCycles = allOddCycles(graph)
 
-	if (all.length === 0) {
-		console.log('Not 3 colorable')
+	if (oddCycles.length === 0) {
+		selectionState = {
+			name: 'No Odd Cycles'
+		}
 	} else {
-		console.log(whatColors(graph, all))
+		const [first, ...rest] = oddCycles
+		selectionState = {
+			name: 'Computed',
+			previousOddCycles: [],
+			currentOddCycle: first,
+			restOddCycles: rest
+		}
 	}
 
-	vertices = [...vertices]
-}}>What Colors</button>
+	edges = edges
+	vertices = vertices
+}}>Find Odd Cycles</button>
 
+<button disabled={selectionState.name !== 'Computed'} on:click={() => {
+	if (selectionState.name === 'Computed') {
+		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousOddCycles, selectionState.currentOddCycle, selectionState.restOddCycles)
+
+		selectionState = {
+			name: 'Computed',
+			previousOddCycles: newPrevious,
+			currentOddCycle: newCurrent,
+			restOddCycles: newRest
+		}
+	}
+
+	edges = edges
+	vertices = vertices
+}}>Next Odd Cycle</button>
+
+<button disabled={selectionState.name !== 'Computed'} on:click={() => {
+	if (selectionState.name === 'Computed') {
+		const graph = asGraph(vertices.length, edges)
+		const oddCycles = [
+			...selectionState.previousOddCycles,
+			selectionState.currentOddCycle,
+			...selectionState.restOddCycles
+		]
+		const result = generateXis(graph, oddCycles)
+
+		if (result.length === 0) {
+			selectionState = {
+				name: 'No Xis'
+			}
+		} else {
+			const [first, ...rest] = result
+			selectionState = {
+				name: 'Xis Computed',
+				oddCycles,
+				previousXis: [],
+				currentXi: first,
+				restXis: rest
+			}
+		}
+	}
+
+
+	edges = edges
+	vertices = vertices
+}}>Find Xis</button>
+
+<button disabled={selectionState.name !== 'Xis Computed'} on:click={() => {
+	if (selectionState.name === 'Xis Computed') {
+		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousXis, selectionState.currentXi, selectionState.restXis)
+
+		selectionState = {
+			name: 'Xis Computed',
+			oddCycles: selectionState.oddCycles,
+			previousXis: newPrevious,
+			currentXi: newCurrent,
+			restXis: newRest
+		}
+	}
+
+	edges = edges
+	vertices = vertices
+}}>Next Xi</button>
+
+
+<button on:click={() => {
+	const graph = asGraph(vertices.length, edges)
+	const oddCycles = allOddCycles2(graph)
+
+	const result = generateQs(graph, oddCycles)
+
+	if (result.length === 0) {
+		selectionState = {
+			name: 'No Qs'
+		}
+	} else {
+		const [first, ...rest] = result
+		selectionState = {
+			name: 'Qs Computed',
+			previousQs: [],
+			currentQ: first,
+			restQs: rest
+		}
+	}
+
+	edges = edges
+	vertices = vertices
+}}>Find Qs</button>
+
+<button disabled={selectionState.name !== 'Qs Computed'} on:click={() => {
+	if (selectionState.name === 'Qs Computed') {
+		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousQs, selectionState.currentQ, selectionState.restQs)
+
+		selectionState = {
+			name: 'Qs Computed',
+			previousQs: newPrevious,
+			currentQ: newCurrent,
+			restQs: newRest
+		}
+	}
+
+	edges = edges
+	vertices = vertices
+}}>Next Q</button>
+
+<button disabled={selectionState.name !== 'Qs Computed'} on:click={() => {
+	if (selectionState.name !== 'Qs Computed') return
+	console.log(selectionState.currentQ)
+
+	for (let {u, v} of selectionState.currentQ.cycleEdges) {
+		console.log({u, v})
+	}
+
+	for (let [u, v] of edges) {
+		console.log(`Has (${u}, ${v})`, mentionedEdge(u, v))
+		console.log(`Has (${v}, ${u})`, mentionedEdge(v, u))
+
+	}
+
+	for (let v of selectionState.currentQ.zeta3Vertices) {
+		console.log(v)
+	}
+}}>Print</button>
 
 <style>
 	main {

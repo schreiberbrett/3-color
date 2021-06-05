@@ -198,7 +198,7 @@ export function analyze(graph: Graph): Analysis {
     }
 }
 
-function findCycles(graph: Graph, cycleLength: number): number[][] {
+export function findCycles(graph: Graph, cycleLength: number): number[][] {
     return findPaths(graph, cycleLength)
         .filter(path => graph.hasEdge(path[0], path[cycleLength - 1]))
 }
@@ -232,7 +232,7 @@ function flatMap<A, B>(xs: A[], f: (a: A) => B[]): B[] {
     return result
 }
 
-function range(n: number): number[] {
+export function range(n: number): number[] {
     let result: number[] = []
 
     for (let i = 0; i < n; i++) {
