@@ -483,7 +483,7 @@ export function nonemptySubsets<T>(xs: T[]): T[][] {
 }
 
 export function nonemptyStrictSubsets<T>(xs: T[]): T[][] {
-    return subsets(xs).slice(1, -2)
+    return subsets(xs).slice(1, -1)
 }
 
 function disjoint3subsets(n: number): [number[], number[], number[]][] {
@@ -556,8 +556,8 @@ export function generateXis(graph: Graph, oddCycles: OddCycle[]): Xi[] {
     return [...currentXis.values()]
 }
 
-export function generateZetaProofs(graph: Graph, oddCycles: OddCycle[]): Zeta3Proof[] {
-    let proofs: Zeta3Proof[] = oddCycles.map(oddCycle => ({startingOddCycle: oddCycle, xis: []}))
+export function generateZeta3Proofs(graph: Graph, oddCycles: OddCycle[]): Zeta3Proof[] {
+    let proofs: Zeta3Proof[] = oddCycles.map(oddCycle => ({startingOddCycle: oddCycle, xisAndOddCycles: []}))
     let alreadyFound = Immutable.Set(oddCycles.map(oddCycle => Immutable.List(oddCycle.vertices)))
 
     let totalProofs = proofs
@@ -573,7 +573,7 @@ export function generateZetaProofs(graph: Graph, oddCycles: OddCycle[]): Zeta3Pr
                     if (!alreadyFound.has(newZeta3)) {
                         const newProof: Zeta3Proof = {
                             startingOddCycle: proof.startingOddCycle,
-                            xis: [...proof.xis, newXi]
+                            xisAndOddCycles: [...proof.xisAndOddCycles, [newXi, oddCycle]]
                         }
 
                         nextProofs.push(newProof)
@@ -587,7 +587,9 @@ export function generateZetaProofs(graph: Graph, oddCycles: OddCycle[]): Zeta3Pr
         currentProofs = nextProofs
     }
 
-    return totalProofs
+    return totalProofs.filter(proof =>
+        !nonemptyStrictSubsets(zeta3(proof)).some(subset => alreadyFound.has(Immutable.List(subset)))
+    )
 }
 
 function allXis(graph: Graph, knownZeta3: SortedNumbers, oddCycle: SortedNumbers): Xi[] {
@@ -628,7 +630,7 @@ export type Xi = {
 
 export type Zeta3Proof = {
     startingOddCycle: OddCycle
-    xis: Xi[]
+    xisAndOddCycles: [Xi, OddCycle][]
 }
 
 function asXi(o1i1: SortedNumbers, o2i2: SortedNumbers, i1i2: [number, number][]): Xi {
@@ -700,9 +702,10 @@ function withoutSubsets(map: Map<string, Xi>, set: Set<string>): Map<string, Xi>
 }
 
 function zeta3(proof: Zeta3Proof): SortedNumbers {
-    if (proof.xis.length === 0) {
+    if (proof.xisAndOddCycles.length === 0) {
         return proof.startingOddCycle.vertices
     }
 
-    return proof.xis[proof.xis.length - 1].o1o2
+    const [xi, _] = proof.xisAndOddCycles[proof.xisAndOddCycles.length - 1]
+    return xi.o1o2
 }

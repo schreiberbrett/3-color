@@ -1,37 +1,51 @@
 <script lang="ts">
 	import { asGraph } from "./analyze";
-	import { oddCycleVertexColor, allOddCycles, rotate, edgeInOddCycle, generateXis, xiVertexColor, subsets, allZetas } from './coloring'
-	import type { Color, OddCycle, Xi } from './coloring';
-	import type { Q } from './Q'
-	import { generateQs, allOddCycles as allOddCycles2, qVertexColor, qMentionedEdge } from './Q'
+	import { oddCycleVertexColor, allOddCycles, edgeInOddCycle, generateZeta3Proofs, xiVertexColor } from './coloring'
+	import type { Color, OddCycle, Xi, Zeta3Proof } from './coloring';
 
 	type SelectionState = {
-		name: 'Not Yet Computed'
+		name: 'Not Computed'
 	} | {
 		name: 'Computed'
-		previousOddCycles: OddCycle[]
-		currentOddCycle: OddCycle
-		restOddCycles: OddCycle[]
-	} | {
-		name: 'No Odd Cycles'
-	} | {
-		name: 'Xis Computed'
-		oddCycles: OddCycle[]
-		previousXis: Xi[],
-		currentXi: Xi,
-		restXis: Xi[]
-	} | {
-		name: 'No Xis'
-	} | {
-		name: 'No Qs'
-	} | {
-		name: 'Qs Computed'
-		previousQs: Q[],
-		currentQ: Q
-		restQs: Q[]
+		zeta3Proofs: Zeta3Proof[]
+		proofIndex: number
+		proofStepIndex: number
 	}
 
-	let selectionState: SelectionState = {name: 'Not Yet Computed'}
+	let selectionState: SelectionState = {name: 'Not Computed'}
+
+	let proofIndexMax: number
+	$: proofIndexMax = selectionState.name === 'Not Computed' ? 0 : selectionState.zeta3Proofs.length - 1
+
+	let proofStepIndexMax: number
+	$: proofStepIndexMax = selectionState.name === 'Not Computed' ? 0 : selectionState.zeta3Proofs[selectionState.proofIndex].xisAndOddCycles.length
+
+	type CurrentView = {
+		name: 'Odd Cycle'
+		oddCycle: OddCycle
+	} | {
+		name: 'Xi'
+		oddCycle: OddCycle
+		xi: Xi
+	} | {
+		name: 'Neither'
+	}
+
+	let currentView: CurrentView
+	$: currentView = function (): CurrentView {
+		if (selectionState.name === 'Not Computed' || selectionState.zeta3Proofs.length === 0) {
+			return {name: 'Neither'}
+		}
+
+		const currentProof = selectionState.zeta3Proofs[selectionState.proofIndex]
+		if (selectionState.proofStepIndex === 0) {
+			return {name: 'Odd Cycle', oddCycle: currentProof.startingOddCycle}
+		}
+
+		const [xi, oddCycle] = currentProof.xisAndOddCycles[selectionState.proofStepIndex - 1]
+
+		return { name: 'Xi', oddCycle, xi }
+	}()
 
 	type EditingState = {
 		name: 'Neutral'
@@ -127,15 +141,11 @@
 	}
 
 	function mentionedEdge(u: number, v: number): boolean {
-		if (selectionState.name === 'Computed') {
-			return edgeInOddCycle(u, v, selectionState.currentOddCycle)
+		if (currentView.name === 'Neither') {
+			return false
 		}
 
-		if (selectionState.name === 'Qs Computed') {
-			return qMentionedEdge(u, v, selectionState.currentQ)
-		}
-
-		return false
+		return edgeInOddCycle(u, v, currentView.oddCycle)
 	}
 
 	function edgeColor(u: number, v: number): 'red' | 'blue' | 'purple' | 'green' | 'black' {
@@ -143,19 +153,15 @@
 	}
 
 	function vertexColor(vertex: number): string {
-		if (selectionState.name === 'Computed') {
-			return oddCycleVertexColor(vertex, selectionState.currentOddCycle)
+		if (currentView.name === 'Neither') {
+			return 'white'
 		}
 
-		if (selectionState.name === 'Xis Computed') {
-			return xiVertexColor(vertex, selectionState.currentXi)
+		if (currentView.name === 'Odd Cycle') {
+			return oddCycleVertexColor(vertex, currentView.oddCycle)
 		}
 
-		if (selectionState.name === 'Qs Computed') {
-			return qVertexColor(vertex, selectionState.currentQ)
-		}
-
-		return 'white'
+		return xiVertexColor(vertex, currentView.xi)
 	}
 </script>
 
@@ -289,7 +295,7 @@
 					cx={xs[vertex]}	cy={ys[vertex]}	r="20" fill={vertexColor(vertex)} stroke="black"
 				/>
 
-				<text x={xs[vertex]} y={ys[vertex]}>{vertex}</text>
+				<!-- <text x={xs[vertex]} y={ys[vertex]}>{vertex}</text> -->
 			</g>
 		{/each}
 
@@ -325,149 +331,49 @@
 
 <button on:click={() => {
 	const graph = asGraph(vertices.length, edges)
-	const oddCycles = allOddCycles(graph)
 
-	if (oddCycles.length === 0) {
-		selectionState = {
-			name: 'No Odd Cycles'
-		}
-	} else {
-		const [first, ...rest] = oddCycles
-		selectionState = {
-			name: 'Computed',
-			previousOddCycles: [],
-			currentOddCycle: first,
-			restOddCycles: rest
-		}
+	selectionState = {
+		name: 'Computed',
+		zeta3Proofs: generateZeta3Proofs(graph, allOddCycles(graph)),
+		proofIndex: 0,
+		proofStepIndex: 0
 	}
 
-	edges = edges
 	vertices = vertices
-}}>Find Odd Cycles</button>
+	edges = edges
+}}>Calculate Proofs</button>
 
-<button disabled={selectionState.name !== 'Computed'} on:click={() => {
+<p> Proof <input disabled={currentView.name === 'Neither'} type="number" min="0" max={proofIndexMax}
+value={selectionState.name === 'Computed' ? selectionState.proofIndex : undefined}
+	on:change={e => {
+	const i = e.currentTarget.valueAsNumber
+
 	if (selectionState.name === 'Computed') {
-		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousOddCycles, selectionState.currentOddCycle, selectionState.restOddCycles)
-
 		selectionState = {
-			name: 'Computed',
-			previousOddCycles: newPrevious,
-			currentOddCycle: newCurrent,
-			restOddCycles: newRest
+			...selectionState,
+			proofIndex: i,
+			proofStepIndex: selectionState.zeta3Proofs[i].xisAndOddCycles.length
 		}
 	}
 
-	edges = edges
 	vertices = vertices
-}}>Next Odd Cycle</button>
-
-<button disabled={selectionState.name !== 'Computed'} on:click={() => {
+	edges = edges
+}}> {#if selectionState.name === 'Computed'} of {selectionState.zeta3Proofs.length} {/if}
+</p>
+<p>Proof Step
+<input disabled={currentView.name === 'Neither'} type="number" id="proof-index" min="0" max={proofStepIndexMax}
+	value={selectionState.name === 'Computed' ? selectionState.proofStepIndex : undefined}
+	on:change={e => {
 	if (selectionState.name === 'Computed') {
-		const graph = asGraph(vertices.length, edges)
-		const oddCycles = [
-			...selectionState.previousOddCycles,
-			selectionState.currentOddCycle,
-			...selectionState.restOddCycles
-		]
-		const result = generateXis(graph, oddCycles)
-
-		if (result.length === 0) {
-			selectionState = {
-				name: 'No Xis'
-			}
-		} else {
-			const [first, ...rest] = result
-			selectionState = {
-				name: 'Xis Computed',
-				oddCycles,
-				previousXis: [],
-				currentXi: first,
-				restXis: rest
-			}
-		}
-	}
-
-
-	edges = edges
-	vertices = vertices
-}}>Find Xis</button>
-
-<button disabled={selectionState.name !== 'Xis Computed'} on:click={() => {
-	if (selectionState.name === 'Xis Computed') {
-		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousXis, selectionState.currentXi, selectionState.restXis)
-
 		selectionState = {
-			name: 'Xis Computed',
-			oddCycles: selectionState.oddCycles,
-			previousXis: newPrevious,
-			currentXi: newCurrent,
-			restXis: newRest
+			...selectionState,
+			proofStepIndex: e.currentTarget.valueAsNumber
 		}
 	}
 
-	edges = edges
 	vertices = vertices
-}}>Next Xi</button>
-
-
-<button on:click={() => {
-	const graph = asGraph(vertices.length, edges)
-	const oddCycles = allOddCycles2(graph)
-
-	const result = generateQs(graph, oddCycles)
-
-	if (result.length === 0) {
-		selectionState = {
-			name: 'No Qs'
-		}
-	} else {
-		const [first, ...rest] = result
-		selectionState = {
-			name: 'Qs Computed',
-			previousQs: [],
-			currentQ: first,
-			restQs: rest
-		}
-	}
-
 	edges = edges
-	vertices = vertices
-}}>Find Qs</button>
-
-<button disabled={selectionState.name !== 'Qs Computed'} on:click={() => {
-	if (selectionState.name === 'Qs Computed') {
-		const [newPrevious, newCurrent, newRest] = rotate(selectionState.previousQs, selectionState.currentQ, selectionState.restQs)
-
-		selectionState = {
-			name: 'Qs Computed',
-			previousQs: newPrevious,
-			currentQ: newCurrent,
-			restQs: newRest
-		}
-	}
-
-	edges = edges
-	vertices = vertices
-}}>Next Q</button>
-
-<button disabled={selectionState.name !== 'Qs Computed'} on:click={() => {
-	if (selectionState.name !== 'Qs Computed') return
-	console.log(selectionState.currentQ)
-
-	for (let {u, v} of selectionState.currentQ.cycleEdges) {
-		console.log({u, v})
-	}
-
-	for (let [u, v] of edges) {
-		console.log(`Has (${u}, ${v})`, mentionedEdge(u, v))
-		console.log(`Has (${v}, ${u})`, mentionedEdge(v, u))
-
-	}
-
-	for (let v of selectionState.currentQ.zeta3Vertices) {
-		console.log(v)
-	}
-}}>Print</button>
+}}> {#if selectionState.name === 'Computed'} of {selectionState.zeta3Proofs[selectionState.proofIndex].xisAndOddCycles.length + 1} {/if} </p>
 
 <style>
 	main {
