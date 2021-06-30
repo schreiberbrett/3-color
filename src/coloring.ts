@@ -2,7 +2,7 @@ import { range, findCycles } from "./analyze";
 import type { Graph } from "./Graph";
 import { isJust, Just, justs, Maybe, Nothing } from "./Maybe";
 import { PairSet } from "./PairSet";
-import { elementOf, merge, mergeUnique, SortedNumbers, sortedUniques } from "./SortedNumbers";
+import { elementOf, mergeUnique, SortedNumbers, sortedUniques } from "./SortedNumbers";
 import * as Immutable from 'immutable'
 
 export type Color = 'Red' | 'Green' | 'Blue'
@@ -283,35 +283,6 @@ function isCompleteBipartiteSubgraph(graph: Graph, as: number[], bs: number[]): 
     return true
 }
 
-type Chi3Proof = {
-    kind: 'Odd Cycle'
-    vertices: number[]
-    oddCycle: number[]
-} | {
-    kind: 'Xi'
-    i1: number[]
-    i2: number[]
-    o1: number[]
-    o2: number[]
-}
-
-function mustBe3(subsetColors: SubsetColors): boolean {
-    return !subsetColors.canBeOneColor && !subsetColors.canBeTwoColors && subsetColors.canBeThreeColors
-}
-
-export function computeOddCycles(graph: Graph): Map<string, number[]> {
-    let map = new Map<string, number[]>()
-    
-    for (let cycleLength = 3; cycleLength <= graph.size(); cycleLength += 2) {
-        for (let cycle of findCycles(graph, cycleLength)) {
-            const key = JSON.stringify([...cycle].sort((a, b) => a - b))
-            map.set(key, cycle)
-        }
-    }
-    
-    return map
-}
-
 export function allOddCycles(graph: Graph): OddCycle[] {
     let alreadyFound = new Set<string>()
     let result = new Array<OddCycle>()
@@ -339,80 +310,6 @@ export function allZetas(graph: Graph, colorings: Color[][]): Map<string, Subset
     }
     
     return map
-}
-
-export function computeChi3Proof(graph: Graph, oddCycles: Map<string, number[]>, chi: Map<string, SubsetColors>): Map<string, Chi3Proof> {
-    const subsets = disjoint3subsets(graph.size())
-    
-    let result = new Map<string, Chi3Proof>()
-    findingI1I2s: for (let [i1, i2, o1o2] of subsets) {
-        const o1o2key = JSON.stringify(o1o2)
-        if (!mustBe3(chi.get(o1o2key))) continue findingI1I2s
-        
-        const o1o2oddCycle = oddCycles.get(o1o2key)
-        
-        if (o1o2oddCycle !== undefined) {
-            result.set(o1o2key, {kind: 'Odd Cycle', vertices: o1o2, oddCycle: o1o2oddCycle})
-            continue findingI1I2s
-        }
-        
-        if (i1.length === 0 || i2.length === 0 || !isCompleteBipartiteSubgraph(graph, i1, i2)) continue findingI1I2s
-        
-        // i1 and i2 form a complete bipartite subgraph
-        
-        findingO1O2s: for (let [o1, o2] of overlapping2subsets(o1o2)) {
-            if (o1.length === 0 || o2.length === 0) continue findingO1O2s
-        
-            const o1key = JSON.stringify(o1)
-            const o2key = JSON.stringify(o2)
-            
-            if (mustBe3(chi.get(o1key)) || mustBe3(chi.get(o2key))) continue findingO1O2s
-            
-            const o1i1key = JSON.stringify(merge(o1, i1))
-
-            const o1i1oddCycle = oddCycles.get(o1i1key)
-
-            if (o1i1oddCycle === undefined) continue findingO1O2s
-
-            const o2i2key = JSON.stringify(merge(o2, i2))
-
-            if (!mustBe3(chi.get(o2i2key))) continue findingO1O2s
-
-            result.set(o1o2key, {kind: 'Xi', i1, i2, o1, o2})
-            continue findingI1I2s
-        }
-    }
-    
-    return result
-}
-
-export function vertexColor(v: number, proof: Chi3Proof): 'white' | 'red' | 'pink' | 'blue' | 'lightblue' | 'purple' | 'green' {
-    if (proof.kind === 'Odd Cycle') {
-        return elementOf(v, proof.vertices) ? 'green' : 'white'
-    }
-    
-    const {i1, i2, o1, o2} = proof
-    
-    if (elementOf(v, i1)) {
-        return 'pink'
-    }
-    
-    if (elementOf(v, i2)) {
-        return 'lightblue'
-    }
-    
-    const elementOfo1 = elementOf(v, o1)
-    const elementOfo2 = elementOf(v, o2)
-    
-    if (elementOfo1 && elementOfo2) {
-        return 'purple'
-    } else if (elementOfo1) {
-        return 'red'
-    } else if (elementOfo2) {
-        return 'blue'
-    }
-    
-    return 'white'
 }
 
 export function xiVertexColor(v: number, xi: Xi): 'white' | 'red' | 'pink' | 'blue' | 'lightblue' | 'purple' | 'green' {
@@ -669,21 +566,6 @@ export function isCompleteBipartite(graph: Graph, edges: [number, number][]): bo
     }
 
     return true
-}
-
-
-export function rotate<T>(previous: T[], current: T, rest: T[]): [T[], T, T[]] {
-    if (rest.length === 0) {
-        if (previous.length === 0) {
-            return [previous, current, rest]
-        }
-
-        const [x, ...xs] = previous
-        return [[], x, [...xs, current]]
-    }
-
-    const [y, ...ys] = rest
-    return [[...previous, current], y, ys]
 }
 
 function withoutSubsets(map: Map<string, Xi>, set: Set<string>): Map<string, Xi> {
