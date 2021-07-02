@@ -74,8 +74,8 @@ export function elementOf(x: number, xs: SortedNumbers): boolean {
     while (start <= end) {
         let mid = Math.floor((start + end) / 2)
         let elem = xs[mid]
-   
-   
+
+
         if (elem === x) {
             return true
         } else if (elem < x) {
@@ -90,4 +90,18 @@ export function elementOf(x: number, xs: SortedNumbers): boolean {
 
 export function sortedUniques(xs: number[]): SortedNumbers {
     return [...(new Set(xs)).values()].sort((a, b) => a - b)
+}
+
+export function equals_SortedNumbers(a: SortedNumbers, b: SortedNumbers): boolean {
+    if (a.length !== b.length) {
+        return false
+    }
+
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false
+        }
+    }
+
+    return true
 }

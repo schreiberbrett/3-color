@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { asGraph } from "./analyze";
-	import { oddCycleVertexColor, allOddCycles, edgeInOddCycle, generateZeta3Proofs, xiVertexColor } from './coloring'
-	import type { Color, OddCycle, Xi, Zeta3Proof } from './coloring';
+	import { proofTrees, oddCycleVertexColor, allOddCycles, edgeInOddCycle, generateZeta3Proofs, xiVertexColor, breakdowns } from './coloring'
+	import type { Color, OddCycle, Xi, Zeta3Proof, E } from './coloring';
+	import type { Maybe } from './Maybe'
+	import { Nothing, Just } from "./Maybe";
+	import { elementOf } from "./SortedNumbers";
+
+	let eIndex = 0
+
+	let maybeProofTrees: Maybe<E[]> = Nothing()
 
 	type SelectionState = {
 		name: 'Not Computed'
@@ -153,6 +160,15 @@
 	}
 
 	function vertexColor(vertex: number): string {
+		if (maybeProofTrees.kind === 'Just') {
+			const e = maybeProofTrees.value[eIndex]
+			if (e.kind === 'Xi') {
+				return xiVertexColor(vertex, {o1: e.o1, o2: e.o2, i1: e.i1, i2: e.i2, o1o2: e.zeta3vertices})
+			} else {
+				return elementOf(vertex, e.zeta3vertices) ? 'gray' : 'white'
+			}
+		}
+
 		if (currentView.name === 'Neither') {
 			return 'white'
 		}
@@ -173,7 +189,7 @@
 				const { cursorX, cursorY } = cursorPosition(event)
 				xs[editingState.vertex] = cursorX
 				ys[editingState.vertex] = cursorY
-				editingState = { name: 'Dragging', vertex: editingState.vertex, ...cursorPosition(event)	}		
+				editingState = { name: 'Dragging', vertex: editingState.vertex, ...cursorPosition(event)	}
 			} else if (editingState.name === 'MakingEdge') {
 				editingState = { name: 'MakingEdge', source: editingState.source, ...cursorPosition(event) }
 			}
@@ -262,7 +278,7 @@
 						const { cursorX, cursorY } = cursorPosition(event)
 						xs[vertex] = cursorX
 						ys[vertex] = cursorY
-						editingState = { name: 'Dragging', vertex: editingState.vertex, cursorX, cursorY }		
+						editingState = { name: 'Dragging', vertex: editingState.vertex, cursorX, cursorY }
 					}
 				}}
 
@@ -295,7 +311,7 @@
 					cx={xs[vertex]}	cy={ys[vertex]}	r="20" fill={vertexColor(vertex)} stroke="black"
 				/>
 
-				<!-- <text x={xs[vertex]} y={ys[vertex]}>{vertex}</text> -->
+				<text x={xs[vertex]} y={ys[vertex]}>{vertex}</text>
 			</g>
 		{/each}
 
@@ -374,6 +390,30 @@ value={selectionState.name === 'Computed' ? selectionState.proofIndex : undefine
 	vertices = vertices
 	edges = edges
 }}> {#if selectionState.name === 'Computed'} of {selectionState.zeta3Proofs[selectionState.proofIndex].xisAndOddCycles.length + 1} {/if} </p>
+
+<button on:click={_ => {
+	maybeProofTrees = Just(proofTrees(asGraph(vertices.length, edges)))
+
+	eIndex = eIndex
+	vertices = vertices
+	edges = edges
+}}>Proof Trees</button>
+
+<p> E Index <input disabled={maybeProofTrees.kind === 'Nothing'} type="number" min="0" max={maybeProofTrees.kind === 'Just' ? maybeProofTrees.value.length - 1 : 0}
+	value={maybeProofTrees.kind === 'Just' ? eIndex : 0}
+		on:change={e => {
+		const i = e.currentTarget.valueAsNumber
+	
+		if (maybeProofTrees.kind === 'Just') {
+			eIndex = i
+		} else {
+			eIndex = 0
+		}
+	
+		vertices = vertices
+		edges = edges
+	}}> {#if maybeProofTrees.kind === 'Just'} of {maybeProofTrees.value.length} {/if}
+</p>
 
 <style>
 	main {

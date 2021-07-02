@@ -108,7 +108,7 @@ export function whatColors(graph: Graph, colorings: Color[][]): {subset: number[
             // Subsets containing odd cycles are not interesting
             if (oddCycles.some(oddCycle => contains(subset, oddCycle))) {
                 return false
-            }            
+            }
 
             return true
         })
@@ -258,19 +258,6 @@ function contains(a: number[], b: number[]): boolean {
     return true
 }
 
-export function completeBipartiteSubgraphs(graph: Graph): [number[], number[]][] {
-    const subsets = disjoint3subsets(graph.size())
-    
-    let result = new Array<[number[], number[]]>()
-    for (let [as, bs, c] of subsets) {
-        if (as.length !== 0 && bs.length !== 0 && isCompleteBipartiteSubgraph(graph, as, bs)) {
-            result.push([as, bs])
-        }
-    }
-    
-    return result
-}
-
 function isCompleteBipartiteSubgraph(graph: Graph, as: number[], bs: number[]): boolean {
     for (let a of as) {
         for (let b of bs) {
@@ -279,7 +266,7 @@ function isCompleteBipartiteSubgraph(graph: Graph, as: number[], bs: number[]): 
             }
         }
     }
-    
+
     return true
 }
 
@@ -304,28 +291,28 @@ export function allOddCycles(graph: Graph): OddCycle[] {
 
 export function allZetas(graph: Graph, colorings: Color[][]): Map<string, SubsetColors> {
     let map = new Map<string, SubsetColors>()
-    
+
     for (let subset of subsets(range(graph.size()))) {
         map.set(JSON.stringify(subset), subsetColors(subset, colorings))
     }
-    
+
     return map
 }
 
 export function xiVertexColor(v: number, xi: Xi): 'white' | 'red' | 'pink' | 'blue' | 'lightblue' | 'purple' | 'green' {
     const {i1, i2, o1, o2} = xi
-    
+
     if (elementOf(v, i1)) {
         return 'pink'
     }
-    
+
     if (elementOf(v, i2)) {
         return 'lightblue'
     }
-    
+
     const elementOfo1 = elementOf(v, o1)
     const elementOfo2 = elementOf(v, o2)
-    
+
     if (elementOfo1 && elementOfo2) {
         return 'purple'
     } else if (elementOfo1) {
@@ -360,9 +347,9 @@ export function edgeInOddCycle(u: number, v: number, oddCycle: OddCycle) {
 
 export function subsets<T>(xs: T[]): T[][] {
     let result = new Array<T[]>()
-    
+
     result.push([])
-    
+
     for (let x of xs) {
         const currentLength = result.length;
         for (let j = 0; j < currentLength; j++) {
@@ -370,7 +357,7 @@ export function subsets<T>(xs: T[]): T[][] {
             result.push([...y, x])
         }
     }
-    
+
     return result
 }
 
@@ -381,76 +368,6 @@ export function nonemptySubsets<T>(xs: T[]): T[][] {
 
 export function nonemptyStrictSubsets<T>(xs: T[]): T[][] {
     return subsets(xs).slice(1, -1)
-}
-
-function disjoint3subsets(n: number): [number[], number[], number[]][] {
-    let result = new Array<[number[], number[], number[]]>()
-    result.push([[], [], []])
-
-    for (let i = 0; i < n; i++) {
-        const currentLength = result.length
-        for (let j = 0; j < currentLength; j++) {
-            const [a, b, c] = result[j]
-            result.push([[...a, i], b, c])
-            result.push([a, [...b, i], c])
-            result.push([a, b, [...c, i]])
-        }
-    }
-
-    return result
-}
-
-export function overlapping2subsets<T>(xs: T[]): [T[], T[]][] {
-    let current = new Array<[T[], T[]]>()
-    let previous = new Array<[T[], T[]]>()
-    
-
-    previous.push([[], []])
-    for (let x of xs) {
-        for (let [first, second] of previous) {
-            const firstWithX = [...first, x]
-            const secondWithX = [...second, x]
-            current.push([firstWithX, second])
-            current.push([first, secondWithX])
-            current.push([firstWithX, secondWithX])
-        }
-        
-        previous = current
-        current = []
-    }
-    
-    return previous
-}
-
-export function generateXis(graph: Graph, oddCycles: OddCycle[]): Xi[] {
-    let oddCycleMap = new Map<string, OddCycle>()
-    let allKnownZeta3s = new Set<string>()
-
-    for (let oddCycle of oddCycles) {
-        const key = JSON.stringify(oddCycle.vertices)
-        oddCycleMap.set(key, oddCycle)
-        allKnownZeta3s.add(key)
-    }
-
-    let currentXisWithSubsets = new Map<string, Xi>()
-    // Initially use odd cycles
-    for (let i = 0; i < oddCycles.length; i++) {
-        for (let j = 0; j < i; j++) {
-            const a = oddCycles[i]
-            const b = oddCycles[j]
-
-            const xis = allXis(graph, a.vertices, b.vertices)
-
-            for (let xi of xis) {
-                const key = JSON.stringify(xi.o1o2)
-                currentXisWithSubsets.set(key, xi)
-            }
-        }
-    }
-
-    let currentXis = /* currentXisWithSubsets */ withoutSubsets(currentXisWithSubsets, allKnownZeta3s)
-
-    return [...currentXis.values()]
 }
 
 export function generateZeta3Proofs(graph: Graph, oddCycles: OddCycle[]): Zeta3Proof[] {
@@ -533,36 +450,36 @@ export type Zeta3Proof = {
 function asXi(o1i1: SortedNumbers, o2i2: SortedNumbers, i1i2: [number, number][]): Xi {
     let repeatedI1 = new Array<number>()
     let repeatedI2 = new Array<number>()
-    
+
     for (let [u, v] of i1i2) {
         repeatedI1.push(u)
         repeatedI2.push(v)
     }
-    
+
     const i1 = sortedUniques(repeatedI1)
     const i2 = sortedUniques(repeatedI2)
     const o1 = o1i1.filter(x => !elementOf(x, i1)) // filter preserves sortedness
     const o2 = o2i2.filter(x => !elementOf(x, i2))
     const o1o2 = mergeUnique(o1, o2)
-    
+
     return { i1, i2, o1, o2, o1o2 }
 }
 
 export function isCompleteBipartite(graph: Graph, edges: [number, number][]): boolean {
     let us = new Array<number>()
     let vs = new Array<number>()
-    
+
     for (let [u, v] of edges) {
         us.push(u)
         vs.push(v)
     }
-    
+
     for (let u of us) {
         for (let v of vs) {
             if (!graph.hasEdge(u, v)) {
                 return false
             }
-        }   
+        }
     }
 
     return true
@@ -590,4 +507,108 @@ function zeta3(proof: Zeta3Proof): SortedNumbers {
 
     const [xi, _] = proof.xisAndOddCycles[proof.xisAndOddCycles.length - 1]
     return xi.o1o2
+}
+
+export type E = {
+  kind: 'Odd Cycle'
+  zeta3vertices: SortedNumbers
+} | {
+  kind: 'Xi'
+  zeta3vertices: SortedNumbers
+  o1: SortedNumbers
+  i1: SortedNumbers
+  o2: SortedNumbers
+  i2: SortedNumbers
+
+  /*
+  TODO: See if these are needed
+  o1i1: SortedNumbers
+  o2i2: SortedNumbers
+  o1o2: SortedNumbers
+  */
+}
+
+export function proofTrees(graph: Graph): E[] {
+	const e0s: E[] = allOddCycles(graph).map(x => ({kind: 'Odd Cycle', zeta3vertices: x.vertices}) as E)
+
+	let result: E[][] = [e0s]
+	let ens = e0s
+	let e0tons = e0s
+
+	let e_n1Result = e_n1(graph, ens, e0tons)
+	while (e_n1Result.length !== 0) {
+		result.push(e_n1Result)
+
+		ens = e_n1Result
+		e0tons = [...e0tons, ...e_n1Result]
+		e_n1Result = e_n1(graph, ens, e0tons)
+	}
+
+	let flattenedResult = new Array<E>()
+	for (let array of result) {
+		flattenedResult.push(...array)
+	}
+
+	return flattenedResult
+}
+
+
+function e_n1(graph: Graph, ens: E[], e0tons: E[]): E[] {
+    console.count('calling e_n1')
+	let result: E[] = []
+
+	for (let en of ens) {
+        console.count('next en')
+		for (let e0ton of e0tons) {
+            console.count('next e0ton')
+			for (let [o1, i1] of breakdowns(en.zeta3vertices)) {
+                console.count('next en breakdown')
+				for (let [o2, i2] of breakdowns(e0ton.zeta3vertices)) {
+                    console.count('next t0ton breakdown')
+					if (xi(graph, o1, i1, i2, o2)) {
+						result.push({kind: 'Xi', o1, i1, i2, o2, zeta3vertices: mergeUnique(o1, o2)})
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+export function breakdowns(xs: SortedNumbers): [SortedNumbers, SortedNumbers][] {
+	if (xs.length === 0) {
+		return [[[], []]]
+	}
+
+	const [first, ...rest] = xs // The cons of a list of sorted numbers is still sorted
+
+	const restBreakdowns: [SortedNumbers, SortedNumbers][] = breakdowns(rest)
+
+	let result = new Array<[SortedNumbers, SortedNumbers]>()
+	for (let [a, b] of restBreakdowns) {
+		result.push([[first, ...a], b])
+		result.push([a, [first, ...b]])
+	}
+
+	return result
+}
+
+function xi(graph: Graph, o1: SortedNumbers, i1: SortedNumbers, i2: SortedNumbers, o2: SortedNumbers): boolean {
+	return (
+		i1.length !== 0 &&
+		i2.length !== 0 &&
+		(o1.length + o2.length) !== 0 &&
+		mutuallyDisjoint(graph, o1, i1, i2) &&
+		mutuallyDisjoint(graph, o2, i1, i2) &&
+		isCompleteBipartiteSubgraph(graph, i1, i2)
+	)
+}
+
+function mutuallyDisjoint(graph: Graph, a: SortedNumbers, b: SortedNumbers, c: SortedNumbers): boolean {
+	return (
+		!a.some(x =>                    elementOf(x, b) || elementOf(x, c)) &&
+		!b.some(x => elementOf(x, a)                    || elementOf(x, c)) &&
+		!c.some(x => elementOf(x, a) || elementOf(x, b))
+	)
 }
