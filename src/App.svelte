@@ -311,7 +311,7 @@
 					cx={xs[vertex]}	cy={ys[vertex]}	r="20" fill={vertexColor(vertex)} stroke="black"
 				/>
 
-				<text x={xs[vertex]} y={ys[vertex]}>{vertex}</text>
+				<!-- <text x={xs[vertex]} y={ys[vertex]}>{vertex}</text> -->
 			</g>
 		{/each}
 
@@ -345,52 +345,6 @@
 </p>
 </main>
 
-<button on:click={() => {
-	const graph = asGraph(vertices.length, edges)
-
-	selectionState = {
-		name: 'Computed',
-		zeta3Proofs: generateZeta3Proofs(graph, allOddCycles(graph)),
-		proofIndex: 0,
-		proofStepIndex: 0
-	}
-
-	vertices = vertices
-	edges = edges
-}}>Calculate Proofs</button>
-
-<p> Proof <input disabled={currentView.name === 'Neither'} type="number" min="0" max={proofIndexMax}
-value={selectionState.name === 'Computed' ? selectionState.proofIndex : undefined}
-	on:change={e => {
-	const i = e.currentTarget.valueAsNumber
-
-	if (selectionState.name === 'Computed') {
-		selectionState = {
-			...selectionState,
-			proofIndex: i,
-			proofStepIndex: selectionState.zeta3Proofs[i].xisAndOddCycles.length
-		}
-	}
-
-	vertices = vertices
-	edges = edges
-}}> {#if selectionState.name === 'Computed'} of {selectionState.zeta3Proofs.length} {/if}
-</p>
-<p>Proof Step
-<input disabled={currentView.name === 'Neither'} type="number" id="proof-index" min="0" max={proofStepIndexMax}
-	value={selectionState.name === 'Computed' ? selectionState.proofStepIndex : undefined}
-	on:change={e => {
-	if (selectionState.name === 'Computed') {
-		selectionState = {
-			...selectionState,
-			proofStepIndex: e.currentTarget.valueAsNumber
-		}
-	}
-
-	vertices = vertices
-	edges = edges
-}}> {#if selectionState.name === 'Computed'} of {selectionState.zeta3Proofs[selectionState.proofIndex].xisAndOddCycles.length + 1} {/if} </p>
-
 <button on:click={_ => {
 	maybeProofTrees = Just(proofTrees(asGraph(vertices.length, edges)))
 
@@ -412,8 +366,15 @@ value={selectionState.name === 'Computed' ? selectionState.proofIndex : undefine
 	
 		vertices = vertices
 		edges = edges
-	}}> {#if maybeProofTrees.kind === 'Just'} of {maybeProofTrees.value.length} {/if}
+	}}> {#if maybeProofTrees.kind === 'Just'} of {maybeProofTrees.value.length} (Current proof height: {maybeProofTrees.value[eIndex].proofHeight}) {/if}
 </p>
+
+<button on:click={_ => {
+	console.log(vertices)
+	console.log(edges.map(([u, v]) => `[${u}, ${v}]`).join(', '))
+	console.log(xs)
+	console.log(ys)
+}}>Print</button>
 
 <style>
 	main {

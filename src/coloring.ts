@@ -4,6 +4,7 @@ import { isJust, Just, justs, Maybe, Nothing } from "./Maybe";
 import { PairSet } from "./PairSet";
 import { elementOf, mergeUnique, SortedNumbers, sortedUniques } from "./SortedNumbers";
 import * as Immutable from 'immutable'
+import { Either, Left, Right } from "./Either"
 
 export type Color = 'Red' | 'Green' | 'Blue'
 
@@ -512,6 +513,7 @@ function zeta3(proof: Zeta3Proof): SortedNumbers {
 export type E = {
   kind: 'Odd Cycle'
   zeta3vertices: SortedNumbers
+  proofHeight: 0
 } | {
   kind: 'Xi'
   zeta3vertices: SortedNumbers
@@ -519,96 +521,147 @@ export type E = {
   i1: SortedNumbers
   o2: SortedNumbers
   i2: SortedNumbers
-
-  /*
-  TODO: See if these are needed
-  o1i1: SortedNumbers
-  o2i2: SortedNumbers
-  o1o2: SortedNumbers
-  */
+  o1i1: E
+  o2i2: E
+  proofHeight: number
 }
 
 export function proofTrees(graph: Graph): E[] {
-	const e0s: E[] = allOddCycles(graph).map(x => ({kind: 'Odd Cycle', zeta3vertices: x.vertices}) as E)
+    const e0sWithSupersets: E[] = allOddCycles(graph).map(x => ({kind: 'Odd Cycle', zeta3vertices: x.vertices, proofHeight: 0}))
+    const [e0s, _] = withoutSupersets(e0sWithSupersets, [])
 
-	let result: E[][] = [e0s]
-	let ens = e0s
-	let e0tons = e0s
+    return helper2(graph, e0s, e0s)
+}
 
-	let e_n1Result = e_n1(graph, ens, e0tons)
-	while (e_n1Result.length !== 0) {
-		result.push(e_n1Result)
+function helper2(graph: Graph, ens: E[], e0tons: E[]): E[] {
+    const nextLayerWithSupersets = e_n1(graph, ens, e0tons)
 
-		ens = e_n1Result
-		e0tons = [...e0tons, ...e_n1Result]
-		e_n1Result = e_n1(graph, ens, e0tons)
-	}
+    const [newE0ToNs, nextLayer] = withoutSupersets(e0tons, nextLayerWithSupersets)
 
-	let flattenedResult = new Array<E>()
-	for (let array of result) {
-		flattenedResult.push(...array)
-	}
+    if (nextLayer.length === 0) {
+        return newE0ToNs.sort(byProofHeightThenNumberOfVertices)
+    }
 
-	return flattenedResult
+    return helper2(graph, nextLayer, [...newE0ToNs, ...nextLayer])
 }
 
 
 function e_n1(graph: Graph, ens: E[], e0tons: E[]): E[] {
-    console.count('calling e_n1')
-	let result: E[] = []
+    let result: E[] = []
 
-	for (let en of ens) {
-        console.count('next en')
-		for (let e0ton of e0tons) {
-            console.count('next e0ton')
-			for (let [o1, i1] of breakdowns(en.zeta3vertices)) {
-                console.count('next en breakdown')
-				for (let [o2, i2] of breakdowns(e0ton.zeta3vertices)) {
-                    console.count('next t0ton breakdown')
-					if (xi(graph, o1, i1, i2, o2)) {
-						result.push({kind: 'Xi', o1, i1, i2, o2, zeta3vertices: mergeUnique(o1, o2)})
-					}
-				}
-			}
-		}
-	}
+    for (let en of ens) {
+        for (let e0ton of e0tons) {
+            for (let [o1, i1] of breakdowns(en.zeta3vertices)) {
+                for (let [o2, i2] of breakdowns(e0ton.zeta3vertices)) {
+                    if (xi(graph, o1, i1, i2, o2)) {
+                        const proofHeight = Math.max(
+                            en.kind    === 'Odd Cycle' ? 0 : en.proofHeight,
+                            e0ton.kind === 'Odd Cycle' ? 0 : e0ton.proofHeight
+                        ) + 1
 
-	return result
+                        result.push({
+                            kind: 'Xi',
+                            o1,
+                            i1,
+                            i2,
+                            o2,
+                            zeta3vertices: mergeUnique(o1, o2),
+                            o1i1: en,
+                            o2i2: e0ton,
+                            proofHeight
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    return result
 }
 
 export function breakdowns(xs: SortedNumbers): [SortedNumbers, SortedNumbers][] {
-	if (xs.length === 0) {
-		return [[[], []]]
-	}
+    if (xs.length === 0) {
+        return [[[], []]]
+    }
 
-	const [first, ...rest] = xs // The cons of a list of sorted numbers is still sorted
+    const [first, ...rest] = xs // The cons of a list of sorted numbers is still sorted
 
-	const restBreakdowns: [SortedNumbers, SortedNumbers][] = breakdowns(rest)
+    const restBreakdowns: [SortedNumbers, SortedNumbers][] = breakdowns(rest)
 
-	let result = new Array<[SortedNumbers, SortedNumbers]>()
-	for (let [a, b] of restBreakdowns) {
-		result.push([[first, ...a], b])
-		result.push([a, [first, ...b]])
-	}
+    let result = new Array<[SortedNumbers, SortedNumbers]>()
+    for (let [a, b] of restBreakdowns) {
+        result.push([[first, ...a], b])
+        result.push([a, [first, ...b]])
+    }
 
-	return result
+    return result
 }
 
 function xi(graph: Graph, o1: SortedNumbers, i1: SortedNumbers, i2: SortedNumbers, o2: SortedNumbers): boolean {
-	return (
-		i1.length !== 0 &&
-		i2.length !== 0 &&
-		(o1.length + o2.length) !== 0 &&
-		mutuallyDisjoint(graph, o1, i1, i2) &&
-		mutuallyDisjoint(graph, o2, i1, i2) &&
-		isCompleteBipartiteSubgraph(graph, i1, i2)
-	)
+    return (
+        i1.length !== 0 &&
+        i2.length !== 0 &&
+        (o1.length + o2.length) !== 0 &&
+        disjoint(i1, i2) &&
+        disjoint(o1, i2) &&
+        disjoint(o2, i1) &&
+        isCompleteBipartiteSubgraph(graph, i1, i2)
+    )
 }
 
-function mutuallyDisjoint(graph: Graph, a: SortedNumbers, b: SortedNumbers, c: SortedNumbers): boolean {
-	return (
-		!a.some(x =>                    elementOf(x, b) || elementOf(x, c)) &&
-		!b.some(x => elementOf(x, a)                    || elementOf(x, c)) &&
-		!c.some(x => elementOf(x, a) || elementOf(x, b))
-	)
+function disjoint(a: SortedNumbers, b: SortedNumbers): boolean {
+    return !a.some(x => elementOf(x, b))
+}
+
+function withoutSupersets(l: E[], r: E[]): [E[], E[]] {
+    // concatenate, sort, filter, unzip
+    const concatenated = [...l.map(x => Left<E, E>(x)), ...r.map(x => Right<E, E>(x))]
+
+    const sorted = [...concatenated].sort((a, b) => byNumberOfVerticesThenProofHeight(value(a), value(b)))
+
+    let knownZeta3s = new Set<string>()
+    let zipped = new Array<Either<E, E>>()
+    for (let e of sorted) {
+        if (!subsets(value(e).zeta3vertices).some(subset => knownZeta3s.has(JSON.stringify(subset)))) {
+            knownZeta3s.add(JSON.stringify(value(e).zeta3vertices))
+            zipped.push(e)
+        }
+    }
+
+    return unzip(zipped)
+}
+
+function byNumberOfVerticesThenProofHeight(a: E, b: E): number {
+    if (a.zeta3vertices.length === b.zeta3vertices.length) {
+        return a.proofHeight - b.proofHeight
+    }
+
+    return a.zeta3vertices.length - b.zeta3vertices.length
+}
+
+function byProofHeightThenNumberOfVertices(a: E, b: E): number {
+    if (a.proofHeight === b.proofHeight) {
+        return a.zeta3vertices.length - b.zeta3vertices.length
+    }
+
+    return a.proofHeight - b.proofHeight
+}
+
+function unzip<L, R>(eithers: Either<L, R>[]): [L[], R[]] {
+    let lefts = new Array<L>()
+    let rights = new Array<R>()
+
+    for (let x of eithers) {
+        if (x.kind === 'Left') {
+            lefts.push(x.left)
+        } else {
+            rights.push(x.right)
+        }
+    }
+
+    return [lefts, rights]
+}
+
+function value<T>(either: Either<T, T>): T {
+    return either.kind === 'Left' ? either.left : either.right
 }
