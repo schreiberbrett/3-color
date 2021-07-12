@@ -512,6 +512,7 @@ function zeta3(proof: Zeta3Proof): SortedNumbers {
 
 export type E = {
   kind: 'Odd Cycle'
+  cycle: number[]
   zeta3vertices: SortedNumbers
   proofHeight: 0
 } | {
@@ -527,7 +528,7 @@ export type E = {
 }
 
 export function proofTrees(graph: Graph): E[] {
-    const e0sWithSupersets: E[] = allOddCycles(graph).map(x => ({kind: 'Odd Cycle', zeta3vertices: x.vertices, proofHeight: 0}))
+    const e0sWithSupersets: E[] = allOddCycles(graph).map(x => ({kind: 'Odd Cycle', cycle: x.cycle, zeta3vertices: x.vertices, proofHeight: 0}))
     const [e0s, _] = withoutSupersets(e0sWithSupersets, [])
 
     return helper2(graph, e0s, e0s)
@@ -664,4 +665,57 @@ function unzip<L, R>(eithers: Either<L, R>[]): [L[], R[]] {
 
 function value<T>(either: Either<T, T>): T {
     return either.kind === 'Left' ? either.left : either.right
+}
+
+export function convert(e: E): Maybe<E>[][] {
+    if (e.kind === 'Odd Cycle') {
+        return singleton(e)
+    }
+
+    return [[Just(e)], ...concat(convert(e.o1i1), convert(e.o2i2))]
+}
+
+function concat<T>(a: Maybe<T>[][], b: Maybe<T>[][]): Maybe<T>[][] {
+    const [x, y] = [smaller(a, b), larger(a, b)]
+
+    const deficit = y.length - x.length
+
+    const paddedX = pad(x, deficit)
+
+    return zip(paddedX, y).map(([xs, ys]) => [...xs, ...ys])
+}
+
+function smaller<T>(a: Maybe<T>[][], b: Maybe<T>[][]): Maybe<T>[][] {
+    return (a.length < b.length) ? a : b
+}
+
+function larger<T>(a: Maybe<T>[][], b: Maybe<T>[][]): Maybe<T>[][] {
+    return (a.length >= b.length) ? a : b
+}
+
+function zip<A, B>(a: A[], b: B[]): [A, B][] {
+    let result = new Array<[A, B]>()
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        result.push([a[i], b[i]])
+    }
+
+    return result
+}
+
+function pad<T>(x: Maybe<T>[][], depth: number): Maybe<T>[][] {
+    let result = new Array<Maybe<T>[]>()
+
+    for (let row of x) {
+        result.push(row)
+    }
+
+    for (let i = x.length; i < (x.length + depth); i++) {
+        result.push(range(Math.pow(2, i)).map(_ => Nothing()))
+    }
+
+    return result
+}
+
+function singleton<T>(x: T): Maybe<T>[][] {
+    return [[Just(x)]]
 }

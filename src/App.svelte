@@ -5,6 +5,7 @@
 	import type { Maybe } from './Maybe'
 	import { Nothing, Just } from "./Maybe";
 	import { elementOf } from "./SortedNumbers";
+	import EList from './EList.svelte'
 
 	let eIndex = 0
 
@@ -26,6 +27,8 @@
 
 	let proofStepIndexMax: number
 	$: proofStepIndexMax = selectionState.name === 'Not Computed' ? 0 : selectionState.zeta3Proofs[selectionState.proofIndex].xisAndOddCycles.length
+
+	let currentE: Maybe<E> = Nothing()
 
 	type CurrentView = {
 		name: 'Odd Cycle'
@@ -160,6 +163,15 @@
 	}
 
 	function vertexColor(vertex: number): string {
+		if (currentE.kind === 'Just') {
+			const e = currentE.value
+			if (e.kind === 'Xi') {
+				return xiVertexColor(vertex, {o1: e.o1, o2: e.o2, i1: e.i1, i2: e.i2, o1o2: e.zeta3vertices})
+			} else {
+				return elementOf(vertex, e.zeta3vertices) ? 'gray' : 'white'
+			}
+		}
+
 		if (maybeProofTrees.kind === 'Just') {
 			const e = maybeProofTrees.value[eIndex]
 			if (e.kind === 'Xi') {
@@ -345,6 +357,14 @@
 </p>
 </main>
 
+{#if maybeProofTrees.kind === 'Just'}
+	<EList e={maybeProofTrees.value[eIndex]} on:change={x => {
+		currentE = Just(x.detail)
+		vertices = vertices
+		edges = edges
+	}} />
+{/if}
+
 <button on:click={_ => {
 	maybeProofTrees = Just(proofTrees(asGraph(vertices.length, edges)))
 
@@ -357,6 +377,7 @@
 	value={maybeProofTrees.kind === 'Just' ? eIndex : 0}
 		on:change={e => {
 		const i = e.currentTarget.valueAsNumber
+		currentE = Nothing()
 	
 		if (maybeProofTrees.kind === 'Just') {
 			eIndex = i
